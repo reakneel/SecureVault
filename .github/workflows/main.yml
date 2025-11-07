@@ -36,7 +36,7 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           release_name: v${{ steps.meta.outputs.version }}
-          draft: true
+          draft: false
           prerelease: false
 
   publish-tauri:
@@ -104,6 +104,6 @@ jobs:
           tagName: v__VERSION__
           releaseName: "v__VERSION__"
           releaseBody: "SecureVault release v__VERSION__"
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

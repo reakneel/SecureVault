@@ -1,51 +1,45 @@
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { VaultProvider, useVault } from './contexts/VaultContext';
-import { WelcomeScreen } from './components/WelcomeScreen';
-import { MasterPasswordPrompt } from './components/MasterPasswordPrompt';
-import { VaultDashboard } from './components/VaultDashboard';
+import { VaultProvider } from './contexts/VaultContext';
+import { BirthdayProvider } from './contexts/BirthdayContext';
+import { AuthForm } from './components/common/AuthForm';
+import { MainDashboard } from './components/dashboard/MainDashboard';
+
+/**
+ * Unified SecureVault Application
+ * Combines Password Vault and Birthday Notification features
+ */
 
 function AppContent() {
-  const { user, isGuest, loading: authLoading } = useAuth();
-  const { masterPassword, loading: vaultLoading } = useVault();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  if (authLoading) {
+  // Loading state
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading...</p>
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading SecureVault...</p>
         </div>
       </div>
     );
   }
 
-  if (!user && !isGuest) {
-    return <WelcomeScreen />;
+  // Show login/register if not authenticated
+  if (!isAuthenticated) {
+    return <AuthForm />;
   }
 
-  if (isGuest && !masterPassword) {
-    return <MasterPasswordPrompt />;
-  }
-
-  if (vaultLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading your vault...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <VaultDashboard />;
+  // Show main dashboard when authenticated
+  return <MainDashboard />;
 }
 
 function App() {
   return (
     <AuthProvider>
       <VaultProvider>
-        <AppContent />
+        <BirthdayProvider>
+          <AppContent />
+        </BirthdayProvider>
       </VaultProvider>
     </AuthProvider>
   );

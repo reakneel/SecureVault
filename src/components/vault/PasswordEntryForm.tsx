@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff, Key } from 'lucide-react';
-import { PasswordEntry } from '../lib/storage';
-import { useVault } from '../contexts/VaultContext';
+import { PasswordEntry } from '../../contexts/VaultContext';
+import { useVault } from '../../contexts/VaultContext';
 import { PasswordGenerator } from './PasswordGenerator';
-import { PasswordGenerator as GeneratorLib } from '../lib/passwordGenerator';
+import { PasswordGenerator as GeneratorLib } from '../../lib/passwordGenerator';
 
 interface PasswordEntryFormProps {
   entry?: PasswordEntry;
@@ -23,7 +23,7 @@ export function PasswordEntryForm({ entry, onClose, onSave }: PasswordEntryFormP
     username: entry?.username || '',
     password: entry?.password || '',
     url: entry?.url || '',
-    category_id: entry?.category_id || null,
+    categoryId: entry?.categoryId || '',
     tags: entry?.tags || [],
     notes: entry?.notes || '',
   });
@@ -45,13 +45,12 @@ export function PasswordEntryForm({ entry, onClose, onSave }: PasswordEntryFormP
       if (entry) {
         await updateEntry(entry.id, {
           ...formData,
-          strength_score: strengthScore,
+          strengthScore: strengthScore,
         });
       } else {
         await addEntry({
           ...formData,
-          strength_score: strengthScore,
-          last_used: null,
+          strengthScore: strengthScore,
         });
       }
       onSave();
@@ -207,11 +206,11 @@ export function PasswordEntryForm({ entry, onClose, onSave }: PasswordEntryFormP
               Category
             </label>
             <select
-              value={formData.category_id || ''}
+              value={formData.categoryId || ''}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  category_id: e.target.value || null,
+                  categoryId: e.target.value || '',
                 })
               }
               className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-900 focus:border-transparent outline-none transition-all"

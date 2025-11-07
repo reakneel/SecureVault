@@ -1,102 +1,135 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase, SUPABASE_ENABLED } from '../lib/supabase';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { initDatabase } from '../lib/db';
+import * as authService from '../lib/services/auth';
+
+/**
+ * Unified Authentication Context
+ * Handles user authentication state using local database
+ */
+
+export interface User {
+  id: string;
+  email: string;
+  fullName?: string;
+  hasMasterPassword: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
-  isGuest: boolean;
-  loading: boolean;
-  signUp: (email: string, password: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
-  continueAsGuest: () => void;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [isGuest, setIsGuest] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Initialize auth state on mount
   useEffect(() => {
-    if (!SUPABASE_ENABLED || !supabase) {
-      setLoading(false);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session) {
-          setIsGuest(false);
-        }
-      })();
-    });
-
-    return () => subscription.unsubscribe();
+    initializeAuth();
   }, []);
 
-  const signUp = async (email: string, password: string) => {
-    if (!SUPABASE_ENABLED || !supabase) throw new Error('Supabase is disabled');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+  async function initializeAuth() {
+    try {
+      setIsLoading(true);
 
-    if (error) throw error;
-  };
+      // Initialize database
+      await initDatabase();
 
-  const signIn = async (email: string, password: string) => {
-    if (!SUPABASE_ENABLED || !supabase) throw new Error('Supabase is disabled');
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) throw error;
-  };
-
-  const signOut = async () => {
-    if (!SUPABASE_ENABLED || !supabase) {
-      setIsGuest(false);
-      return;
+      // Check for existing user session
+      const currentUser = authService.getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+      }
+    } catch (err) {
+      console.error('Failed to initialize auth:', err);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
     }
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-    setIsGuest(false);
+  }
+
+  async function login(email: string, password: string) {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const loggedInUser = await authService.login(email, password);
+      setUser(loggedInUser);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Login failed';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function register(email: string, password: string, fullName?: string) {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const registeredUser = await authService.register(email, password, fullName);
+      setUser(registeredUser);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Registration failed';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function logout() {
+    try {
+      setIsLoading(true);
+      authService.logout();
+      setUser(null);
+    } catch (err) {
+      console.error('Logout error:', err);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function refreshUser() {
+    try {
+      const currentUser = authService.getCurrentUser();
+      setUser(currentUser);
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+      setUser(null);
+    }
+  }
+
+  function clearError() {
+    setError(null);
+  }
+
+  const value: AuthContextType = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    error,
+    login,
+    register,
+    logout,
+    clearError,
+    refreshUser
   };
 
-  const continueAsGuest = () => {
-    setIsGuest(true);
-    setLoading(false);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        isGuest,
-        loading,
-        signUp,
-        signIn,
-        signOut,
-        continueAsGuest,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

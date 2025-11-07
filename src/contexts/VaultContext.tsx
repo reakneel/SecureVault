@@ -1,167 +1,238 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { LocalStorageService, PasswordEntry, Category } from '../lib/storage';
-import { APP_MODE } from '../lib/appMode';
-import { LocalDataSource, SupabaseDataSource, type VaultDataSource } from '../lib/datasource';
+import * as vaultService from '../lib/services/vault';
+import * as authService from '../lib/services/auth';
+
+/**
+ * VaultContext - Manages password vault data and operations
+ * Uses local database services
+ */
+
+export interface PasswordEntry {
+  id: string;
+  title: string;
+  username?: string;
+  password: string;
+  url?: string;
+  notes?: string;
+  categoryId?: string;
+  strengthScore: number;
+  lastUsed?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+}
 
 interface VaultContextType {
   entries: PasswordEntry[];
   categories: Category[];
   loading: boolean;
   error: string | null;
-  masterPassword: string | null;
+  hasMasterPassword: boolean;
+  isMasterPasswordVerified: boolean;
   setMasterPassword: (password: string) => Promise<void>;
-  addEntry: (entry: Omit<PasswordEntry, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
+  verifyMasterPassword: (password: string) => Promise<boolean>;
+  addEntry: (entry: {
+    title: string;
+    password: string;
+    username?: string;
+    url?: string;
+    categoryId?: string;
+    notes?: string;
+    strengthScore?: number;
+  }) => Promise<void>;
   updateEntry: (id: string, entry: Partial<PasswordEntry>) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   refreshEntries: () => Promise<void>;
+  clearError: () => void;
 }
 
 const VaultContext = createContext<VaultContextType | undefined>(undefined);
 
 export function VaultProvider({ children }: { children: ReactNode }) {
-  const { user, isGuest } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [entries, setEntries] = useState<PasswordEntry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [masterPassword, setMasterPasswordState] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<VaultDataSource | null>(null);
+  const [isMasterPasswordVerified, setIsMasterPasswordVerified] = useState(false);
 
-  const setMasterPassword = async (password: string) => {
-    if (isGuest) {
-      const isValid = LocalStorageService.hasMasterPassword()
-        ? await LocalStorageService.verifyMasterPassword(password)
-        : true;
+  const hasMasterPassword = user?.hasMasterPassword || false;
 
-      if (!isValid) {
-        throw new Error('Invalid master password');
-      }
-
-      if (!LocalStorageService.hasMasterPassword()) {
-        await LocalStorageService.setMasterPassword(password);
-      }
-
-      setMasterPasswordState(password);
-      await loadLocalEntries(password);
-    } else {
-      setMasterPasswordState(password);
-      // In cloud mode, we also use the master password as encryption key
-      if (APP_MODE === 'cloud' && user) {
-        setDataSource(new SupabaseDataSource(user.id, password));
-      }
-    }
-  };
-
-  const loadLocalEntries = async (password: string) => {
-    try {
-      const localEntries = await LocalStorageService.getEntries(password);
-      setEntries(localEntries);
-      const localCategories = LocalStorageService.getCategories();
-      setCategories(localCategories);
-      setLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load entries');
-      setLoading(false);
-    }
-  };
-
-  const loadFromDataSource = async (source: VaultDataSource) => {
-    try {
-      const [e, c] = await Promise.all([source.loadEntries(), source.loadCategories()]);
-      setEntries(e);
-      setCategories(c);
-      setLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load entries');
-      setLoading(false);
-    }
-  };
-
+  // Load categories and check master password when authenticated
   useEffect(() => {
-    if (isGuest && masterPassword) {
-      setDataSource(new LocalDataSource(masterPassword));
-      loadLocalEntries(masterPassword);
-      return;
+    if (isAuthenticated && user) {
+      loadCategories();
+    } else {
+      // Reset state on logout
+      setEntries([]);
+      setCategories([]);
+      setIsMasterPasswordVerified(false);
     }
-    if (!isGuest && user && masterPassword && APP_MODE === 'cloud') {
-      const source = new SupabaseDataSource(user.id, masterPassword);
-      setDataSource(source);
-      loadFromDataSource(source);
-      return;
+  }, [isAuthenticated, user]);
+
+  async function loadCategories() {
+    if (!user) return;
+
+    try {
+      const cats = vaultService.getCategories(user.id);
+      setCategories(cats);
+    } catch (err) {
+      console.error('Failed to load categories:', err);
     }
-    if (!user && !isGuest) {
+  }
+
+  async function loadEntries() {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      const data = vaultService.getPasswordEntries(user.id);
+      setEntries(data);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load password entries');
+      console.error('Failed to load entries:', err);
+    } finally {
       setLoading(false);
     }
-  }, [user, isGuest, masterPassword]);
+  }
 
-  const addEntry = async (entry: Omit<PasswordEntry, 'id' | 'created_at' | 'updated_at'>) => {
-    if (isGuest && masterPassword) {
-      const newEntry: PasswordEntry = {
+  async function setMasterPassword(password: string): Promise<void> {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      await authService.setMasterPassword(user.id, password);
+      setIsMasterPasswordVerified(true);
+      setError(null);
+
+      // Load entries after setting master password
+      await loadEntries();
+    } catch (err: any) {
+      setError(err.message || 'Failed to set master password');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verifyMasterPassword(password: string): Promise<boolean> {
+    if (!user) return false;
+
+    try {
+      setLoading(true);
+      const isValid = await authService.verifyMasterPassword(user.id, password);
+
+      if (isValid) {
+        setIsMasterPasswordVerified(true);
+        setError(null);
+
+        // Load entries after successful verification
+        await loadEntries();
+        return true;
+      } else {
+        setError('Invalid master password');
+        return false;
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to verify master password');
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function addEntry(entry: {
+    title: string;
+    password: string;
+    username?: string;
+    url?: string;
+    categoryId?: string;
+    notes?: string;
+    strengthScore?: number;
+  }): Promise<void> {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      const newEntry = vaultService.createPasswordEntry(user.id, {
         ...entry,
-        id: crypto.randomUUID(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      const updatedEntries = [newEntry, ...entries];
-      await LocalStorageService.saveEntries(updatedEntries, masterPassword);
-      setEntries(updatedEntries);
-    } else if (dataSource && user) {
-      const created = await dataSource.addEntry(entry, user.id);
-      setEntries([created, ...entries]);
+        strengthScore: entry.strengthScore || 0
+      });
+      setEntries((prev) => [newEntry, ...prev]);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to add password entry');
+      throw err;
+    } finally {
+      setLoading(false);
     }
+  }
+
+  async function updateEntry(id: string, entry: Partial<PasswordEntry>): Promise<void> {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      const updatedEntry = vaultService.updatePasswordEntry(user.id, id, entry);
+      setEntries((prev) => prev.map((e) => (e.id === id ? updatedEntry : e)));
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update password entry');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteEntry(id: string): Promise<void> {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      setLoading(true);
+      vaultService.deletePasswordEntry(user.id, id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete password entry');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function refreshEntries(): Promise<void> {
+    await loadEntries();
+  }
+
+  function clearError() {
+    setError(null);
+  }
+
+  const value: VaultContextType = {
+    entries,
+    categories,
+    loading,
+    error,
+    hasMasterPassword,
+    isMasterPasswordVerified,
+    setMasterPassword,
+    verifyMasterPassword,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+    refreshEntries,
+    clearError,
   };
 
-  const updateEntry = async (id: string, entry: Partial<PasswordEntry>) => {
-    if (isGuest && masterPassword) {
-      const updatedEntries = entries.map((e: PasswordEntry) =>
-        e.id === id ? { ...e, ...entry, updated_at: new Date().toISOString() } : e
-      );
-      await LocalStorageService.saveEntries(updatedEntries, masterPassword);
-      setEntries(updatedEntries);
-    } else if (dataSource && user) {
-      await dataSource.updateEntry(id, entry);
-      setEntries(entries.map((e: PasswordEntry) => (e.id === id ? { ...e, ...entry } : e)));
-    }
-  };
-
-  const deleteEntry = async (id: string) => {
-    if (isGuest && masterPassword) {
-      const updatedEntries = entries.filter((e: PasswordEntry) => e.id !== id);
-      await LocalStorageService.saveEntries(updatedEntries, masterPassword);
-      setEntries(updatedEntries);
-    } else if (dataSource && user) {
-      await dataSource.deleteEntry(id);
-      setEntries(entries.filter((e: PasswordEntry) => e.id !== id));
-    }
-  };
-
-  const refreshEntries = async () => {
-    if (dataSource && user && !isGuest) {
-      await loadFromDataSource(dataSource);
-    } else if (isGuest && masterPassword) {
-      await loadLocalEntries(masterPassword);
-    }
-  };
-
-  return (
-    <VaultContext.Provider
-      value={{
-        entries,
-        categories,
-        loading,
-        error,
-        masterPassword,
-        setMasterPassword,
-        addEntry,
-        updateEntry,
-        deleteEntry,
-        refreshEntries,
-      }}
-    >
-      {children}
-    </VaultContext.Provider>
-  );
+  return <VaultContext.Provider value={value}>{children}</VaultContext.Provider>;
 }
 
 export function useVault() {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, Copy, Check, X } from 'lucide-react';
-import { PasswordGenerator as Generator, PasswordOptions } from '../lib/passwordGenerator';
+import { PasswordGenerator as Generator, PasswordOptions } from '../../lib/passwordGenerator';
 
 interface PasswordGeneratorProps {
   onUsePassword?: (password: string) => void;

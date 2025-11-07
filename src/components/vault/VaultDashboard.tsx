@@ -11,16 +11,15 @@ import {
   Folder,
   type LucideIcon,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { useVault } from '../contexts/VaultContext';
+import { useAuth } from '../../contexts/AuthContext';
+import { useVault, PasswordEntry, Category } from '../../contexts/VaultContext';
 import { PasswordCard } from './PasswordCard';
 import { PasswordEntryForm } from './PasswordEntryForm';
 import { PasswordGenerator } from './PasswordGenerator';
-import { PasswordEntry } from '../lib/storage';
 import * as Icons from 'lucide-react';
 
 export function VaultDashboard() {
-  const { user, isGuest, signOut } = useAuth();
+  const { user, logout } = useAuth();
   const { entries, categories, deleteEntry, refreshEntries } = useVault();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,16 +38,16 @@ export function VaultDashboard() {
         entry.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCategory =
-        !selectedCategory || entry.category_id === selectedCategory;
+        !selectedCategory || entry.categoryId === selectedCategory;
 
       return matchesSearch && matchesCategory;
     });
   }, [entries, searchQuery, selectedCategory]);
 
-  const weakPasswords = entries.filter((e) => e.strength_score < 60).length;
+  const weakPasswords = entries.filter((e) => e.strengthScore < 60).length;
   const categoryCounts = categories.map((cat) => ({
     ...cat,
-    count: entries.filter((e) => e.category_id === cat.id).length,
+    count: entries.filter((e) => e.categoryId === cat.id).length,
   }));
 
   const handleDelete = async () => {
@@ -81,7 +80,7 @@ export function VaultDashboard() {
               <div>
                 <h1 className="text-xl font-bold text-slate-900">SecureVault</h1>
                 <p className="text-xs text-slate-500">
-                  {isGuest ? 'Guest Mode (Local Storage)' : user?.email || 'Cloud Sync Enabled'}
+                  {user?.email || 'Password Manager'}
                 </p>
               </div>
             </div>
@@ -106,7 +105,7 @@ export function VaultDashboard() {
               </button>
 
               <button
-                onClick={signOut}
+                onClick={logout}
                 className="flex items-center gap-2 px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
                 title="Sign Out"
               >

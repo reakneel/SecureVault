@@ -11,7 +11,7 @@ import {
   Folder,
   type LucideIcon,
 } from 'lucide-react';
-import { PasswordEntry } from '../lib/storage';
+import { PasswordEntry } from '../../lib/services/vault';
 import * as Icons from 'lucide-react';
 
 interface PasswordCardProps {
