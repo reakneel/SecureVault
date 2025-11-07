@@ -4,13 +4,14 @@ import { useVault } from '../../contexts/VaultContext';
 import { useBirthday } from '../../contexts/BirthdayContext';
 import * as vaultService from '../../lib/services/vault';
 import * as birthdayService from '../../lib/services/birthdays';
-import { Lock, Calendar, LogOut, User, Settings } from 'lucide-react';
+import { Lock, Calendar, QrCode, LogOut, User, Settings } from 'lucide-react';
 import { Button } from '../common/Button';
 import { VaultDashboard } from '../vault/VaultDashboard';
 import { MasterPasswordPrompt } from '../vault/MasterPasswordPrompt';
 import { BirthdayModule } from '../birthdays/BirthdayModule';
+import { QRCodeModule } from '../qrcode/QRCodeModule';
 
-type ActiveModule = 'dashboard' | 'vault' | 'birthdays';
+type ActiveModule = 'dashboard' | 'vault' | 'birthdays' | 'qrcode';
 
 interface VaultStats {
   total_passwords: number;
@@ -137,6 +138,10 @@ export function MainDashboard() {
         {activeModule === 'birthdays' && (
           <BirthdayModule />
         )}
+
+        {activeModule === 'qrcode' && (
+          <QRCodeModule />
+        )}
       </main>
 
       {/* Master Password Prompt Modal */}
@@ -175,7 +180,7 @@ function DashboardHome({ vaultStats, birthdayStats, isLoading, onOpenModule, onO
       </div>
 
       {/* Module Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {/* Password Vault Module */}
         <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6 border border-gray-100">
           <div className="flex items-start justify-between mb-4">
@@ -266,6 +271,40 @@ function DashboardHome({ vaultStats, birthdayStats, isLoading, onOpenModule, onO
             onClick={() => onOpenModule('birthdays')}
           >
             View Birthdays
+          </Button>
+        </div>
+
+        {/* QR Code Tools Module */}
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow duration-200 p-6 border border-gray-100">
+          <div className="flex items-start justify-between mb-4">
+            <div className="p-3 bg-blue-100 rounded-xl">
+              <QrCode className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+
+          <h3 className="text-xl font-bold text-gray-900 mb-2">QR Code Tools</h3>
+          <p className="text-gray-600 text-sm mb-4">
+            Generate and extract QR codes instantly
+          </p>
+
+          <div className="space-y-2 mb-4 text-sm text-gray-600">
+            <div className="flex justify-between">
+              <span>QR Generator</span>
+              <span className="font-semibold text-blue-600">Create</span>
+            </div>
+            <div className="flex justify-between">
+              <span>QR Extractor</span>
+              <span className="font-semibold text-purple-600">Decode</span>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            size="md"
+            className="w-full bg-blue-600 hover:bg-blue-700"
+            onClick={() => onOpenModule('qrcode')}
+          >
+            Open QR Tools
           </Button>
         </div>
       </div>
